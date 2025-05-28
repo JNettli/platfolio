@@ -12,7 +12,7 @@ export default function Hub3D() {
         const height = 720;
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x111122);
+        scene.background = new THREE.Color(0x02020b);
 
         const camera = new THREE.PerspectiveCamera(
             90,
@@ -42,29 +42,68 @@ export default function Hub3D() {
         floor.rotation.x = Math.PI / 2;
         scene.add(floor);
 
+        // Starfield
+        const starCount = 5000;
+        const starGeometry = new THREE.BufferGeometry();
+        const starPositions = [];
+
+        const minRadius = 5;
+        const maxRadius = 50;
+        const minY = -10;
+        const maxY = 20;
+
+        for (let i = 0; i < starCount; i++) {
+            let x, y, z;
+
+            while (true) {
+                const angle = Math.random() * 2 * Math.PI;
+                const r = minRadius + Math.random() * (maxRadius - minRadius);
+                x = r * Math.cos(angle);
+                z = r * Math.sin(angle);
+                y = minY + Math.random() * (maxY - minY);
+
+                const distFromCenter = Math.sqrt(x * x + z * z);
+                if (distFromCenter >= minRadius) break;
+            }
+
+            starPositions.push(x, y, z);
+        }
+
+        starGeometry.setAttribute(
+            "position",
+            new THREE.Float32BufferAttribute(starPositions, 3)
+        );
+
+        const starMaterial = new THREE.PointsMaterial({
+            color: 0xe0fdff,
+            size: 0.05,
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+        });
+
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+
+        const starSizes = new Float32Array(starCount);
+        for (let i = 0; i < starCount; i++) {
+            starSizes[i] = 0.05 + Math.random() * 0.02;
+        }
+        starGeometry.setAttribute(
+            "size",
+            new THREE.BufferAttribute(starSizes, 1)
+        );
+
         // Walls
         const walls = new THREE.Mesh(
-            new THREE.CylinderGeometry(5, 5, 4, 32, 1, true),
+            new THREE.CylinderGeometry(5, 5, 200, 32, 1, true),
             new THREE.MeshStandardMaterial({
-                color: 0x8b5a2b,
-                side: THREE.BackSide,
-            })
-        );
-        walls.position.y = 1.5;
-        scene.add(walls);
-
-        // Roof
-        const roof = new THREE.Mesh(
-            new THREE.ConeGeometry(5, 6, 64, 1, true),
-            new THREE.MeshStandardMaterial({
-                color: 0xe0fdff,
-                transparent: true,
-                opacity: 0.8,
+                color: 0x6f5047,
                 side: THREE.DoubleSide,
             })
         );
-        roof.position.y = 6.5;
-        scene.add(roof);
+        scene.add(walls);
 
         // Center Column
         const column = new THREE.Mesh(
@@ -87,11 +126,26 @@ export default function Hub3D() {
 
         // Player
         const player = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.25, 0.25, 1, 32, 1, false),
+            new THREE.BoxGeometry(0.5, 0.5, 0.5),
             new THREE.MeshStandardMaterial({ color: 0xff0000 })
         );
         player.position.set(0, 0.5, -2);
         scene.add(player);
+
+        // Interactable Box
+        const interactBox = new THREE.Mesh(
+            new THREE.BoxGeometry(0.4, 0.4, 0.4),
+            new THREE.MeshStandardMaterial({ color: 0xffffff })
+        );
+        const interactButton = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.1, 0.1, 0.1, 8, 1, false),
+            new THREE.MeshStandardMaterial({ color: 0xff0000 })
+        );
+
+        interactBox.position.set(0, 0.2, 4);
+        interactButton.position.set(0, 0.4, 4);
+        scene.add(interactBox);
+        scene.add(interactButton);
 
         // Input
         const keysPressed = {};
@@ -282,10 +336,15 @@ export default function Hub3D() {
                 }
             }
 
+            function animateStars(time) {
+                starMaterial.opacity = 0.6 + 0.2 * Math.sin(time * 0.005);
+            }
+
             cameraTarget.lerp(player.position, 0.1);
             camera.position.set(0, 2, 0);
             camera.lookAt(cameraTarget);
 
+            animateStars(performance.now());
             renderer.render(scene, camera);
         };
 
@@ -313,6 +372,26 @@ export default function Hub3D() {
                 left: "50%",
                 transform: "translate(-50%, -50%) scale(1)",
             }}
-        />
+        >
+            <div
+                id="interactionPrompt"
+                style={{
+                    position: "absolute",
+                    color: "#E0FDFF",
+                    backgroundColor: "rgba(0,0,0,0.6)",
+                    padding: "6px 10px",
+                    borderRadius: "5px",
+                    fontFamily: "Arial, sans-serif",
+                    fontSize: "16px",
+                    pointerEvents: "none",
+                    display: "none",
+                    transform: "translate(-50%, -100%)",
+                    whiteSpace: "nowrap",
+                    userSelect: "none",
+                }}
+            >
+                Press E to remove walls
+            </div>
+        </div>
     );
 }
