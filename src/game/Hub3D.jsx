@@ -179,9 +179,7 @@ export default function Hub3D() {
 
         // Player
         const loader = new THREE.TextureLoader();
-        const spriteTexture = loader.load(
-            "/src/assets/sprites/sprite_sheet.png"
-        );
+        const spriteTexture = loader.load("/assets/sprites/sprite_sheet.png");
         const frameWidth = 1 / 18;
         const frameHeight = 1;
         let frameSequence = [];
