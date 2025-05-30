@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { useNavigate } from "react-router-dom";
 
 export default function Hub3D() {
     const mountRef = useRef(null);
+    const promptRef = useRef(null);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -41,6 +42,58 @@ export default function Hub3D() {
         );
         floor.rotation.x = Math.PI / 2;
         scene.add(floor);
+
+        // Platforms
+        const platforms = [];
+        let hasLeftGroundLevel = false;
+
+        function createPlatform(x, y, z, width, height, depth) {
+            const geometry = new THREE.BoxGeometry(width, height, depth);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x888888,
+            });
+            const platform = new THREE.Mesh(geometry, material);
+            platform.position.set(x, y, z);
+            scene.add(platform);
+            platforms.push({
+                mesh: platform,
+                width,
+                height,
+                depth,
+            });
+            return platform;
+        }
+
+        // X, Y, Z, Width, Height, Depth
+        createPlatform(0, 2.1, -5, 2, 0.2, 3);
+        createPlatform(1.5, 2.5, 0, 1, 0.2, 1);
+        createPlatform(-1, 4, 0, 1.5, 0.2, 2);
+
+        function checkPlatformCollision(player, platform, yVelocity) {
+            const { mesh, width, height, depth } = platform;
+            const px = player.position.x;
+            const py = player.position.y - 0.5;
+            const pz = player.position.z;
+
+            const halfWidth = width / 2;
+            const halfHeight = height / 2;
+            const halfDepth = depth / 2;
+
+            const platformTop = mesh.position.y + halfHeight;
+
+            const inX =
+                px >= mesh.position.x - halfWidth &&
+                px <= mesh.position.x + halfWidth;
+            const inZ =
+                pz >= mesh.position.z - halfDepth &&
+                pz <= mesh.position.z + halfDepth;
+            const nearY = py <= platformTop + 0.1 && py >= platformTop - 0.3;
+
+            if (inX && inZ && nearY && yVelocity < 0.05) {
+                return platformTop;
+            }
+            return null;
+        }
 
         // Starfield
         const starCount = 5000;
@@ -125,11 +178,34 @@ export default function Hub3D() {
         scene.add(door);
 
         // Player
-        const player = new THREE.Mesh(
-            new THREE.BoxGeometry(0.5, 0.5, 0.5),
-            new THREE.MeshStandardMaterial({ color: 0xff0000 })
+        const loader = new THREE.TextureLoader();
+        const spriteTexture = loader.load(
+            "/src/assets/sprites/sprite_sheet.png"
         );
-        player.position.set(0, 0.5, -2);
+        const frameWidth = 1 / 18;
+        const frameHeight = 1;
+        let frameSequence = [];
+        let frameStep = 0;
+        let currentDirection = "forward";
+
+        spriteTexture.magFilter = THREE.NearestFilter;
+        spriteTexture.wrapS = THREE.RepeatWrapping;
+        spriteTexture.wrapT = THREE.RepeatWrapping;
+        spriteTexture.repeat.set(frameWidth, frameHeight);
+
+        const spriteMaterial = new THREE.MeshBasicMaterial({
+            map: spriteTexture,
+            transparent: true,
+            side: THREE.DoubleSide,
+        });
+
+        let animationTimer = 0;
+        const baseFrameDelay = 150;
+        const sprintFrameDelay = 115;
+
+        const spriteGeometry = new THREE.PlaneGeometry(1, 1);
+        const player = new THREE.Mesh(spriteGeometry, spriteMaterial);
+        player.position.set(0, 0.25, -2);
         scene.add(player);
 
         // Interactable Box
@@ -153,6 +229,15 @@ export default function Hub3D() {
         const handleKeyDown = (e) => {
             e.preventDefault();
             keysPressed[e.key.toLowerCase()] = true;
+
+            if (e.key.toLowerCase() === "e") {
+                const dist = player.position.distanceTo(
+                    interactButton.position
+                );
+                if (dist < 1) {
+                    toggleWalls();
+                }
+            }
         };
         const handleKeyUp = (e) => {
             e.preventDefault();
@@ -188,9 +273,18 @@ export default function Hub3D() {
         const jumpStrength = 0.16;
         const gravity = -0.008;
 
-        const animate = () => {
-            requestAnimationFrame(animate);
+        let wallsVisible = false;
 
+        function toggleWalls() {
+            wallsVisible = !wallsVisible;
+            walls.scale.y = !wallsVisible ? 1 : 0.0001;
+        }
+
+        const UPDATE_INTERVAL = 1000 / 60;
+        let lastTime = performance.now();
+        let accumulator = 0;
+
+        function update() {
             const toPlayer = new THREE.Vector3()
                 .copy(player.position)
                 .setY(0)
@@ -225,7 +319,6 @@ export default function Hub3D() {
                 const maxRadius = 4.5;
 
                 const currentRadius = player.position.clone().setY(0).length();
-
                 let newRadius = newPosition.clone().setY(0).length();
 
                 const forwardDot = moveVector.dot(forward);
@@ -274,7 +367,7 @@ export default function Hub3D() {
                         particleMaterial.clone()
                     );
                     particle.position.copy(player.position);
-                    particle.position.y -= 0.2;
+                    particle.position.y -= 0.35;
                     particle.material.transparent = true;
                     particle.material.opacity = 1;
                     particle.scale.set(0.01, 0.01, 0.01);
@@ -282,7 +375,7 @@ export default function Hub3D() {
                     particle.userData = {
                         lifetime: 0,
                         maxLifetime: maxParticleLife,
-                        maxScale: 0.05 + Math.random() * 0.075,
+                        maxScale: 0.01 + Math.random() * 0.1,
                     };
 
                     scene.add(particle);
@@ -298,15 +391,47 @@ export default function Hub3D() {
                 }
             }
             spacePressedLastFrame = keysPressed[" "] ?? false;
+
             yVelocity += gravity;
             player.position.y += yVelocity;
 
-            if (player.position.y <= 0.25) {
-                player.position.y = 0.25;
+            let platformTopY = null;
+
+            for (const platform of platforms) {
+                const topY = checkPlatformCollision(
+                    player,
+                    platform,
+                    yVelocity
+                );
+                if (topY !== null) {
+                    platformTopY = topY;
+                    break;
+                }
+            }
+
+            const groundY = 0.5;
+
+            if (platformTopY !== null) {
+                player.position.y = platformTopY + 0.43;
                 yVelocity = 0;
                 isGrounded = true;
                 jumpCount = 0;
+
+                hasLeftGroundLevel = true;
+            } else if (player.position.y <= groundY) {
+                player.position.y = groundY;
+                yVelocity = 0;
+                isGrounded = true;
+                jumpCount = 0;
+
+                hasLeftGroundLevel = false;
+            } else {
+                isGrounded = false;
             }
+
+            let targetCameraY = hasLeftGroundLevel ? player.position.y + 2 : 2;
+
+            camera.position.y += (targetCameraY - camera.position.y) * 0.1;
 
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
@@ -336,19 +461,235 @@ export default function Hub3D() {
                 }
             }
 
-            function animateStars(time) {
-                starMaterial.opacity = 0.6 + 0.2 * Math.sin(time * 0.005);
+            let direction = "idle";
+            const isMoving = moveVector.length() > 0.001;
+
+            if (isMoving) {
+                const camForward = new THREE.Vector3(0, 0, -1)
+                    .applyQuaternion(camera.quaternion)
+                    .setY(0)
+                    .normalize();
+                const camRight = new THREE.Vector3()
+                    .crossVectors(camForward, new THREE.Vector3(0, 1, 0))
+                    .normalize();
+
+                const moveDir = moveVector.clone().normalize();
+                const forwardDot = moveDir.dot(camForward);
+                const rightDot = moveDir.dot(camRight);
+                if (keysPressed["a"] || keysPressed["arrowleft"]) {
+                    direction = "left";
+                } else if (keysPressed["d"] || keysPressed["arrowright"]) {
+                    direction = "right";
+                } else if (Math.abs(forwardDot) > Math.abs(rightDot)) {
+                    direction = forwardDot > 0 ? "away" : "toward";
+                }
+
+                currentDirection = direction;
+            } else {
+                direction = currentDirection || "toward";
+            }
+
+            if (direction !== currentDirection) {
+                currentDirection = direction;
+
+                player.scale.x = direction === "right" ? -1 : 1;
+
+                const animationFrames = {
+                    toward: [3, 0, 4, 0],
+                    away: [5, 1, 6, 1],
+                    left: [7, 2, 8, 2],
+                    right: [7, 2, 8, 2],
+                    sprintToward: [10, 9, 11, 9],
+                    sprintAway: [13, 12, 14, 12],
+                    sprintLeft: [16, 15, 17, 16],
+                    idle: {
+                        toward: 0,
+                        away: 1,
+                        side: 2,
+                    },
+                };
+
+                if (!isMoving) {
+                    let frameIndex;
+                    switch (direction) {
+                        case "toward":
+                            frameIndex = animationFrames.idle.toward;
+                            break;
+                        case "away":
+                            frameIndex = animationFrames.idle.away;
+                            break;
+                        case "left":
+                        case "right":
+                            frameIndex = animationFrames.idle.side;
+                            break;
+                    }
+                    setSpriteFrame(frameIndex);
+                    frameStep = 0;
+                    frameSequence = [];
+                } else {
+                    if (isSprinting) {
+                        switch (direction) {
+                            case "toward":
+                                frameSequence = animationFrames.sprintToward;
+                                break;
+                            case "away":
+                                frameSequence = animationFrames.sprintAway;
+                                break;
+                            case "left":
+                            case "right":
+                                frameSequence = animationFrames.sprintLeft;
+                                break;
+                        }
+                    } else {
+                        if (direction === "toward" || direction === "away") {
+                            frameSequence = animationFrames[direction];
+                        } else {
+                            frameSequence = animationFrames.left;
+                        }
+                    }
+                    frameStep = 0;
+                    setSpriteFrame(frameSequence[frameStep]);
+                    frameStep = (frameStep + 1) % frameSequence.length;
+                }
+
+                animationTimer = 0;
+            }
+            const currentFrameDelay = keysPressed["shift"]
+                ? sprintFrameDelay
+                : baseFrameDelay;
+
+            animationTimer += UPDATE_INTERVAL;
+            if (animationTimer >= currentFrameDelay) {
+                animationTimer = 0;
+
+                const animationFrames = {
+                    toward: [3, 0, 4, 0],
+                    away: [5, 1, 6, 1],
+                    left: [7, 2, 8, 2],
+                    right: [7, 2, 8, 2],
+                    sprintToward: [10, 9, 11, 9],
+                    sprintAway: [13, 12, 14, 12],
+                    sprintLeft: [16, 15, 17, 15],
+                    idle: {
+                        toward: 0,
+                        away: 1,
+                        side: 2,
+                    },
+                };
+
+                let frameIndex = 0;
+
+                if (!isMoving) {
+                    switch (direction) {
+                        case "toward":
+                            frameIndex = animationFrames.idle.toward;
+                            break;
+                        case "away":
+                            frameIndex = animationFrames.idle.away;
+                            break;
+                        case "left":
+                        case "right":
+                            frameIndex = animationFrames.idle.side;
+                            break;
+                    }
+                    frameStep = 0;
+                    frameSequence = [];
+                } else {
+                    if (isSprinting) {
+                        switch (direction) {
+                            case "toward":
+                                frameSequence = animationFrames.sprintToward;
+                                break;
+                            case "away":
+                                frameSequence = animationFrames.sprintAway;
+                                break;
+                            case "left":
+                            case "right":
+                                frameSequence = animationFrames.sprintLeft;
+                                break;
+                        }
+                    } else {
+                        if (direction === "toward" || direction === "away") {
+                            frameSequence = animationFrames[direction];
+                        } else {
+                            frameSequence = animationFrames.left;
+                        }
+                    }
+                    frameIndex = frameSequence[frameStep];
+                    frameStep = (frameStep + 1) % frameSequence.length;
+                }
+
+                if (direction === "right") {
+                    player.scale.x = -1;
+                } else {
+                    player.scale.x = 1;
+                }
+
+                setSpriteFrame(frameIndex);
+            }
+
+            function setSpriteFrame(index) {
+                const columns = 18;
+                const frameWidth = 1 / columns;
+
+                spriteTexture.repeat.set(frameWidth, 1);
+                spriteTexture.offset.x = index * frameWidth;
+                spriteTexture.offset.y = 0;
+            }
+
+            const lookAt = new THREE.Vector3().copy(camera.position);
+            lookAt.y = player.position.y;
+            player.lookAt(lookAt);
+        }
+
+        function render() {
+            animateStars(performance.now());
+
+            const distanceToButton = player.position.distanceTo(
+                interactButton.position
+            );
+
+            if (distanceToButton < 1) {
+                promptRef.current.style.display = "block";
+
+                const vector = interactButton.position.clone();
+                vector.project(camera);
+
+                const x = (vector.x * 0.5 + 0.5) * width;
+                const y = (vector.y * -0.5 + 0.5) * height;
+
+                promptRef.current.style.left = `${x}px`;
+                promptRef.current.style.top = `${y}px`;
+            } else {
+                promptRef.current.style.display = "none";
             }
 
             cameraTarget.lerp(player.position, 0.1);
-            camera.position.set(0, 2, 0);
             camera.lookAt(cameraTarget);
 
-            animateStars(performance.now());
             renderer.render(scene, camera);
-        };
+        }
 
-        animate();
+        function animateStars(time) {
+            starMaterial.opacity = 0.6 + 0.2 * Math.sin(time * 0.005);
+        }
+
+        function gameLoop(currentTime) {
+            requestAnimationFrame(gameLoop);
+
+            let delta = currentTime - lastTime;
+            lastTime = currentTime;
+            accumulator += delta;
+
+            while (accumulator >= UPDATE_INTERVAL) {
+                update();
+                accumulator -= UPDATE_INTERVAL;
+            }
+
+            render();
+        }
+
+        gameLoop(performance.now());
 
         return () => {
             window.removeEventListener("click", onClick);
@@ -374,6 +715,7 @@ export default function Hub3D() {
             }}
         >
             <div
+                ref={promptRef}
                 id="interactionPrompt"
                 style={{
                     position: "absolute",
