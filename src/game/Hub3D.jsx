@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { useNavigate } from "react-router-dom";
-import { Reflector } from "three/examples/jsm/Addons.js";
+import { RGBELoader } from "three/examples/jsm/Addons.js";
 
 export default function Hub3D() {
     const mountRef = useRef(null);
@@ -10,21 +10,41 @@ export default function Hub3D() {
 
     useEffect(() => {
         const mountNode = mountRef.current;
-        const width = 1280;
-        const height = 720;
+        let width = window.innerWidth;
+        let height = window.innerHeight;
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x02020b);
 
-        const camera = new THREE.PerspectiveCamera(
-            90,
-            width / height,
-            0.1,
-            100
-        );
+        let camera = new THREE.PerspectiveCamera(90, width / height, 0.1, 100);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(width, height);
         mountNode.appendChild(renderer.domElement);
+
+        function onWindowResize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(width, height);
+        }
+
+        window.addEventListener("resize", onWindowResize, false);
+
+        const rgbeLoader = new RGBELoader();
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        pmremGenerator.compileEquirectangularShader();
+
+        rgbeLoader.load("/assets/img/bg.hdr", function (texture) {
+            const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+
+            scene.environment = envMap;
+            scene.background = envMap;
+
+            texture.dispose();
+            pmremGenerator.dispose();
+        });
 
         // Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
@@ -34,32 +54,16 @@ export default function Hub3D() {
         scene.add(pointLight);
 
         // Floor
-        const geometry = new THREE.CircleGeometry(5, 64);
-
-        const reflectiveFloor = new Reflector(geometry, {
-            clipBias: 0.4,
-            textureWidth: window.innerWidth * window.devicePixelRatio,
-            textureHeight: window.innerHeight * window.devicePixelRatio,
-            color: 0x444444,
-            metalness: 0.5,
-            roughness: 0.1,
-            clearcoat: 0.5,
-            clearcoatRoughness: 0.5,
+        const floorGeometry = new THREE.CircleGeometry(25, 64);
+        const floorMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0x888888,
+            metalness: 1,
+            roughness: 0,
         });
 
-        reflectiveFloor.rotation.x = -Math.PI / 2;
-        scene.add(reflectiveFloor);
-
-        const floor = new THREE.Mesh(
-            new THREE.CircleGeometry(5, 64),
-            new THREE.MeshStandardMaterial({
-                color: 0x605047,
-                side: THREE.DoubleSide,
-                opacity: 0,
-                transparent: true,
-            })
-        );
-        floor.rotation.x = Math.PI / 2;
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
         scene.add(floor);
 
         // Platforms
@@ -123,7 +127,7 @@ export default function Hub3D() {
 
         const minRadius = 5;
         const maxRadius = 50;
-        const minY = -10;
+        const minY = 100;
         const maxY = 1000;
 
         for (let i = 0; i < starCount; i++) {
@@ -170,10 +174,10 @@ export default function Hub3D() {
         );
 
         // Walls
-        const walls = new THREE.Mesh( // STANDARD = 200
-            new THREE.CylinderGeometry(5, 5, 200, 32, 1, true),
+        const walls = new THREE.Mesh(
+            new THREE.CylinderGeometry(8, 8, 0.2, 32, 1, true),
             new THREE.MeshStandardMaterial({
-                color: 0x6f5047,
+                color: 0xffffff,
                 side: THREE.DoubleSide,
             })
         );
@@ -181,10 +185,11 @@ export default function Hub3D() {
 
         // Center Column
         const column = new THREE.Mesh(
-            new THREE.CylinderGeometry(1, 1, 0.5, 32, 1, false),
-            new THREE.MeshStandardMaterial({
-                color: 0x123123,
-                side: THREE.DoubleSide,
+            new THREE.SphereGeometry(1, 32, 16),
+            new THREE.MeshPhysicalMaterial({
+                color: 0x444444,
+                metalness: 1,
+                roughness: 0,
             })
         );
         column.position.y = 0;
@@ -195,7 +200,7 @@ export default function Hub3D() {
             new THREE.BoxGeometry(1, 2, 0.1),
             new THREE.MeshStandardMaterial({ color: 0xffffff })
         );
-        door.position.set(0, 1, -4.9);
+        door.position.set(0, 1, -8);
         scene.add(door);
 
         // Gallery 1
@@ -203,7 +208,7 @@ export default function Hub3D() {
             new THREE.BoxGeometry(0.1, 2, 3),
             new THREE.MeshStandardMaterial({ color: 0xffffff })
         );
-        holidaze.position.set(4.6, 1.5, 0);
+        holidaze.position.set(7.6, 1.5, 0);
         scene.add(holidaze);
 
         // Player
@@ -243,19 +248,40 @@ export default function Hub3D() {
         createPlatform(4, 3.5, 0, 1, 0.2, 1);
         createPlatform(-4.1, 4, 0, 1, 0.2, 1);
 
-        createPlatform(0, 6, -4, 1, 0.2, 1);
-        createPlatform(0, 9, -4, 1, 0.2, 1);
-        createPlatform(0, 12, -4, 1, 0.2, 1);
-        createPlatform(0, 15, -4, 1, 0.2, 1);
-        createPlatform(0, 18, -4, 1, 0.2, 1);
-        createPlatform(0, 21, -4, 1, 0.2, 1);
-        createPlatform(0, 24, -4, 1, 0.2, 1);
-        createPlatform(0, 27, -4, 1, 0.2, 1);
-        createPlatform(0, 30, -4, 1, 0.2, 1);
-        createPlatform(0, 33, -4, 1, 0.2, 1);
-        createPlatform(0, 36, -4, 1, 0.2, 1);
-        createPlatform(0, 39, -4, 1, 0.2, 1);
-        createPlatform(0, 42, -4, 1, 0.2, 1);
+        createPlatform(0, 3, 4, 1, 0.2, 1);
+        createPlatform(0, 6, 4, 1, 0.2, 1);
+        createPlatform(0, 9, 4, 1, 0.2, 1);
+        createPlatform(0, 12, 4, 1, 0.2, 1);
+        createPlatform(0, 15, 4, 1, 0.2, 1);
+        createPlatform(0, 18, 4, 1, 0.2, 1);
+        createPlatform(0, 21, 4, 1, 0.2, 1);
+        createPlatform(0, 24, 4, 1, 0.2, 1);
+        createPlatform(0, 27, 4, 1, 0.2, 1);
+        createPlatform(0, 30, 4, 1, 0.2, 1);
+        createPlatform(0, 33, 4, 1, 0.2, 1);
+        createPlatform(0, 36, 4, 1, 0.2, 1);
+        createPlatform(0, 39, 4, 1, 0.2, 1);
+        createPlatform(0, 42, 4, 1, 0.2, 1);
+        createPlatform(0, 45, 4, 1, 0.2, 1);
+        createPlatform(0, 48, 4, 1, 0.2, 1);
+        createPlatform(0, 51, 4, 1, 0.2, 1);
+        createPlatform(0, 54, 4, 1, 0.2, 1);
+        createPlatform(0, 57, 4, 1, 0.2, 1);
+        createPlatform(0, 60, 4, 1, 0.2, 1);
+        createPlatform(0, 63, 4, 1, 0.2, 1);
+        createPlatform(0, 66, 4, 1, 0.2, 1);
+        createPlatform(0, 69, 4, 1, 0.2, 1);
+        createPlatform(0, 72, 4, 1, 0.2, 1);
+        createPlatform(0, 75, 4, 1, 0.2, 1);
+        createPlatform(0, 78, 4, 1, 0.2, 1);
+        createPlatform(0, 81, 4, 1, 0.2, 1);
+        createPlatform(0, 84, 4, 1, 0.2, 1);
+        createPlatform(0, 87, 4, 1, 0.2, 1);
+        createPlatform(0, 90, 4, 1, 0.2, 1);
+        createPlatform(0, 93, 4, 1, 0.2, 1);
+        createPlatform(0, 96, 4, 1, 0.2, 1);
+        createPlatform(0, 99, 4, 1, 0.2, 1);
+        createPlatform(0, 102, 4, 1, 0.2, 1);
 
         createPlatform(0, 995, -2, 1, 0.2, 1);
 
@@ -372,7 +398,7 @@ export default function Hub3D() {
                 const newPosition = player.position.clone().add(moveVector);
 
                 const minRadius = 1 + 0.25;
-                const maxRadius = 4.5;
+                const maxRadius = 7.5;
 
                 const currentRadius = player.position.clone().setY(0).length();
                 let newRadius = newPosition.clone().setY(0).length();
@@ -422,8 +448,17 @@ export default function Hub3D() {
                         particleGeometry,
                         particleMaterial.clone()
                     );
-                    particle.position.copy(player.position);
-                    particle.position.y -= 0.35;
+                    const backwardOffset = moveVector
+                        .clone()
+                        .normalize()
+                        .multiplyScalar(-0.2);
+                    const spawnPosition = player.position
+                        .clone()
+                        .add(backwardOffset);
+                    spawnPosition.y -= 0.35;
+
+                    particle.position.copy(spawnPosition);
+
                     particle.material.transparent = true;
                     particle.material.opacity = 1;
                     particle.scale.set(0.01, 0.01, 0.01);
@@ -485,9 +520,19 @@ export default function Hub3D() {
                 isGrounded = false;
             }
 
-            let targetCameraY = hasLeftGroundLevel ? player.position.y + 2 : 2;
+            const targetCameraY = hasLeftGroundLevel
+                ? player.position.y + 2
+                : 2;
+            camera.position.set(
+                0,
+                camera.position.y + (targetCameraY - camera.position.y) * 0.1,
+                0
+            );
 
-            camera.position.y += (targetCameraY - camera.position.y) * 0.1;
+            const lookAtTarget = player.position.clone();
+            lookAtTarget.y = camera.position.y;
+            cameraTarget.lerp(player.position, 0.1);
+            camera.lookAt(cameraTarget);
 
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
@@ -720,9 +765,6 @@ export default function Hub3D() {
                 promptRef.current.style.display = "none";
             }
 
-            cameraTarget.lerp(player.position, 0.1);
-            camera.lookAt(cameraTarget);
-
             renderer.render(scene, camera);
         }
 
@@ -761,8 +803,6 @@ export default function Hub3D() {
         <div
             ref={mountRef}
             style={{
-                width: "1280px",
-                height: "720px",
                 overflow: "hidden",
                 position: "absolute",
                 top: "50%",
