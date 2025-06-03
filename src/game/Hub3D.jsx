@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { useNavigate } from "react-router-dom";
+import { Reflector } from "three/examples/jsm/Addons.js";
 
 export default function Hub3D() {
     const mountRef = useRef(null);
@@ -26,18 +27,36 @@ export default function Hub3D() {
         mountNode.appendChild(renderer.domElement);
 
         // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 2);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
         scene.add(ambientLight);
-        const pointLight = new THREE.PointLight(0xffffff, 100);
+        const pointLight = new THREE.PointLight(0xffffff, 10);
         pointLight.position.set(0, 8, 0);
         scene.add(pointLight);
 
         // Floor
+        const geometry = new THREE.CircleGeometry(5, 64);
+
+        const reflectiveFloor = new Reflector(geometry, {
+            clipBias: 0.4,
+            textureWidth: window.innerWidth * window.devicePixelRatio,
+            textureHeight: window.innerHeight * window.devicePixelRatio,
+            color: 0x444444,
+            metalness: 0.5,
+            roughness: 0.1,
+            clearcoat: 0.5,
+            clearcoatRoughness: 0.5,
+        });
+
+        reflectiveFloor.rotation.x = -Math.PI / 2;
+        scene.add(reflectiveFloor);
+
         const floor = new THREE.Mesh(
             new THREE.CircleGeometry(5, 64),
             new THREE.MeshStandardMaterial({
                 color: 0x605047,
                 side: THREE.DoubleSide,
+                opacity: 0,
+                transparent: true,
             })
         );
         floor.rotation.x = Math.PI / 2;
@@ -65,9 +84,11 @@ export default function Hub3D() {
         }
 
         // X, Y, Z, Width, Height, Depth
+        /*
         createPlatform(0, 2.1, -5, 2, 0.2, 3);
         createPlatform(1.5, 2.5, 0, 1, 0.2, 1);
         createPlatform(-1, 4, 0, 1.5, 0.2, 2);
+        */
 
         function checkPlatformCollision(player, platform, yVelocity) {
             const { mesh, width, height, depth } = platform;
@@ -103,7 +124,7 @@ export default function Hub3D() {
         const minRadius = 5;
         const maxRadius = 50;
         const minY = -10;
-        const maxY = 20;
+        const maxY = 1000;
 
         for (let i = 0; i < starCount; i++) {
             let x, y, z;
@@ -141,7 +162,7 @@ export default function Hub3D() {
 
         const starSizes = new Float32Array(starCount);
         for (let i = 0; i < starCount; i++) {
-            starSizes[i] = 0.05 + Math.random() * 0.02;
+            starSizes[i] = 0.05 + Math.random() * 0.2;
         }
         starGeometry.setAttribute(
             "size",
@@ -149,7 +170,7 @@ export default function Hub3D() {
         );
 
         // Walls
-        const walls = new THREE.Mesh(
+        const walls = new THREE.Mesh( // STANDARD = 200
             new THREE.CylinderGeometry(5, 5, 200, 32, 1, true),
             new THREE.MeshStandardMaterial({
                 color: 0x6f5047,
@@ -177,6 +198,14 @@ export default function Hub3D() {
         door.position.set(0, 1, -4.9);
         scene.add(door);
 
+        // Gallery 1
+        const holidaze = new THREE.Mesh(
+            new THREE.BoxGeometry(0.1, 2, 3),
+            new THREE.MeshStandardMaterial({ color: 0xffffff })
+        );
+        holidaze.position.set(4.6, 1.5, 0);
+        scene.add(holidaze);
+
         // Player
         const loader = new THREE.TextureLoader();
         const spriteTexture = loader.load("/assets/sprites/sprite_sheet.png");
@@ -197,13 +226,39 @@ export default function Hub3D() {
             side: THREE.DoubleSide,
         });
 
+        spriteMaterial.alphaTest = 0.1;
+        spriteMaterial.transparent = true;
+
         let animationTimer = 0;
         const baseFrameDelay = 150;
         const sprintFrameDelay = 115;
 
         const spriteGeometry = new THREE.PlaneGeometry(1, 1);
         const player = new THREE.Mesh(spriteGeometry, spriteMaterial);
-        player.position.set(0, 0.25, -2);
+        //player.position.set(0, 0.25, -2);
+        player.position.set(0, 2, 2);
+
+        // X, Y, Z, Width, Height, Depth
+        createPlatform(0, 2.1, -5, 2, 0.2, 2);
+        createPlatform(4, 3.5, 0, 1, 0.2, 1);
+        createPlatform(-4.1, 4, 0, 1, 0.2, 1);
+
+        createPlatform(0, 6, -4, 1, 0.2, 1);
+        createPlatform(0, 9, -4, 1, 0.2, 1);
+        createPlatform(0, 12, -4, 1, 0.2, 1);
+        createPlatform(0, 15, -4, 1, 0.2, 1);
+        createPlatform(0, 18, -4, 1, 0.2, 1);
+        createPlatform(0, 21, -4, 1, 0.2, 1);
+        createPlatform(0, 24, -4, 1, 0.2, 1);
+        createPlatform(0, 27, -4, 1, 0.2, 1);
+        createPlatform(0, 30, -4, 1, 0.2, 1);
+        createPlatform(0, 33, -4, 1, 0.2, 1);
+        createPlatform(0, 36, -4, 1, 0.2, 1);
+        createPlatform(0, 39, -4, 1, 0.2, 1);
+        createPlatform(0, 42, -4, 1, 0.2, 1);
+
+        createPlatform(0, 995, -2, 1, 0.2, 1);
+
         scene.add(player);
 
         // Interactable Box
@@ -251,8 +306,11 @@ export default function Hub3D() {
             mouse.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
             mouse.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObject(door);
-            if (intersects.length > 0) navigate("/time-trial");
+            const intersectDoor = raycaster.intersectObject(door);
+            const intersectHolidaze = raycaster.intersectObject(holidaze);
+            if (intersectDoor.length > 0) navigate("/time-trial");
+            if (intersectHolidaze.length > 0)
+                window.open("https://jnet-holidaze.netlify.app/");
         };
         window.addEventListener("click", onClick);
 
