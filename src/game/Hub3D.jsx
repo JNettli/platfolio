@@ -1,24 +1,36 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { useNavigate } from "react-router-dom";
+import Preloader from "./components/Preloader";
 import { RGBELoader } from "three/examples/jsm/Addons.js";
+import Joystick from "./components/Joystick";
+import "../index.css";
+import HoverPromptManager from "./components/HoverPrompt";
+
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 export default function Hub3D() {
+    const navigate = useNavigate();
+    const [joystick, setJoystick] = useState({ x: 0, y: 0 });
+    const [isLoading, setIsLoading] = useState(true);
+    const loadingManager = new THREE.LoadingManager();
+    const loader = new THREE.TextureLoader(loadingManager);
     const mountRef = useRef(null);
     const promptRef = useRef(null);
-    const navigate = useNavigate();
 
     useEffect(() => {
         const mountNode = mountRef.current;
+        if (!mountNode) return;
+
         let width = window.innerWidth;
         let height = window.innerHeight;
 
         const scene = new THREE.Scene();
 
-        let camera = new THREE.PerspectiveCamera(90, width / height, 0.1, 100);
+        let camera = new THREE.PerspectiveCamera(87, width / height, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(width, height);
         mountNode.appendChild(renderer.domElement);
+        renderer.setSize(width, height);
 
         function onWindowResize() {
             width = window.innerWidth;
@@ -32,7 +44,7 @@ export default function Hub3D() {
 
         window.addEventListener("resize", onWindowResize, false);
 
-        const rgbeLoader = new RGBELoader();
+        const rgbeLoader = new RGBELoader(loadingManager);
         const pmremGenerator = new THREE.PMREMGenerator(renderer);
         pmremGenerator.compileEquirectangularShader();
 
@@ -54,7 +66,7 @@ export default function Hub3D() {
         scene.add(pointLight);
 
         // Floor
-        const floorGeometry = new THREE.CircleGeometry(25, 64);
+        const floorGeometry = new THREE.CircleGeometry(1000, 64);
         const floorMaterial = new THREE.MeshPhysicalMaterial({
             color: 0x888888,
             metalness: 1,
@@ -175,7 +187,7 @@ export default function Hub3D() {
 
         // Walls
         const walls = new THREE.Mesh(
-            new THREE.CylinderGeometry(8, 8, 0.2, 32, 1, true),
+            new THREE.CylinderGeometry(8, 8, 0.2, 64, 1, true),
             new THREE.MeshStandardMaterial({
                 color: 0xffffff,
                 side: THREE.DoubleSide,
@@ -204,15 +216,39 @@ export default function Hub3D() {
         scene.add(door);
 
         // Gallery 1
-        const holidaze = new THREE.Mesh(
-            new THREE.BoxGeometry(0.1, 2, 3),
-            new THREE.MeshStandardMaterial({ color: 0xffffff })
-        );
-        holidaze.position.set(7.6, 1.5, 0);
-        scene.add(holidaze);
+        let holidaze;
+        loader.load("/assets/img/defaultlogo.png", (texture) => {
+            holidaze = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 2, 4),
+                new THREE.MeshStandardMaterial({ map: texture })
+            );
+            holidaze.position.set(7.6, 1.5, 0);
+            scene.add(holidaze);
+        });
+
+        // Gallery 2
+        let anemicHeroes;
+        loader.load("/assets/img/anemicheroes.png", (texture) => {
+            anemicHeroes = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 2, 4),
+                new THREE.MeshStandardMaterial({ map: texture })
+            );
+            anemicHeroes.position.set(-7.6, 1.5, 0);
+            scene.add(anemicHeroes);
+        });
+
+        // Gallery 3
+        let zork;
+        loader.load("/assets/img/zork.png", (texture) => {
+            zork = new THREE.Mesh(
+                new THREE.BoxGeometry(4, 2, 0.1),
+                new THREE.MeshStandardMaterial({ map: texture })
+            );
+            zork.position.set(0, 1.5, 7.6);
+            scene.add(zork);
+        });
 
         // Player
-        const loader = new THREE.TextureLoader();
         const spriteTexture = loader.load("/assets/sprites/sprite_sheet.png");
         const frameWidth = 1 / 18;
         const frameHeight = 1;
@@ -310,11 +346,30 @@ export default function Hub3D() {
             keysPressed[e.key.toLowerCase()] = true;
 
             if (e.key.toLowerCase() === "e") {
-                const dist = player.position.distanceTo(
+                const distToBtn = player.position.distanceTo(
                     interactButton.position
                 );
-                if (dist < 1) {
+                if (distToBtn < 1) {
                     toggleWalls();
+                }
+                const distToHolidaze = player.position.distanceTo(
+                    holidaze.position
+                );
+                if (distToHolidaze < 2.8) {
+                    window.open("https://jnet-holidaze.netlify.app/", "_blank");
+                }
+                const distToAnemic = player.position.distanceTo(
+                    anemicHeroes.position
+                );
+                if (distToAnemic < 2.8) {
+                    window.open("https://anemic-heroes.netlify.app/", "_blank");
+                }
+                const distToZork = player.position.distanceTo(zork.position);
+                if (distToZork < 2.8) {
+                    window.open(
+                        "https://jnettli-zork-remake.netlify.app/",
+                        "_blank"
+                    );
                 }
             }
         };
@@ -324,21 +379,6 @@ export default function Hub3D() {
         };
         window.addEventListener("keydown", handleKeyDown);
         window.addEventListener("keyup", handleKeyUp);
-
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-        const onClick = (event) => {
-            const bounds = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
-            mouse.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
-            const intersectDoor = raycaster.intersectObject(door);
-            const intersectHolidaze = raycaster.intersectObject(holidaze);
-            if (intersectDoor.length > 0) navigate("/time-trial");
-            if (intersectHolidaze.length > 0)
-                window.open("https://jnet-holidaze.netlify.app/");
-        };
-        window.addEventListener("click", onClick);
 
         const particles = [];
         const particleMaterial = new THREE.MeshBasicMaterial({
@@ -392,6 +432,27 @@ export default function Hub3D() {
                 moveVector.sub(right);
             if (keysPressed["d"] || keysPressed["arrowright"])
                 moveVector.add(right);
+
+            if (joystick.x !== 0 || joystick.y !== 0) {
+                const forward = new THREE.Vector3(
+                    Math.sin(player.rotation.y),
+                    0,
+                    Math.cos(player.rotation.y)
+                );
+                const right = new THREE.Vector3().crossVectors(
+                    forward,
+                    new THREE.Vector3(0, 1, 0)
+                );
+
+                forward.normalize();
+                right.normalize();
+
+                moveVector
+                    .add(forward.multiplyScalar(-joystick.y))
+                    .add(right.multiplyScalar(joystick.x));
+
+                moveVector.normalize().multiplyScalar(currentSpeed);
+            }
 
             if (moveVector.length() > 0) {
                 moveVector.normalize().multiplyScalar(currentSpeed);
@@ -746,23 +807,330 @@ export default function Hub3D() {
         function render() {
             animateStars(performance.now());
 
-            const distanceToButton = player.position.distanceTo(
+            const distance = player.position.distanceTo(
                 interactButton.position
             );
 
-            if (distanceToButton < 1) {
-                promptRef.current.style.display = "block";
-
-                const vector = interactButton.position.clone();
-                vector.project(camera);
-
+            if (distance < 1) {
+                const vector = interactButton.position.clone().project(camera);
                 const x = (vector.x * 0.5 + 0.5) * width;
                 const y = (vector.y * -0.5 + 0.5) * height;
 
-                promptRef.current.style.left = `${x}px`;
-                promptRef.current.style.top = `${y}px`;
+                promptRef.current?.showPrompt({
+                    id: interactButton.uuid,
+                    content: "Press E to remove walls",
+                    x,
+                    y,
+                });
             } else {
-                promptRef.current.style.display = "none";
+                promptRef.current?.hidePrompt(interactButton.uuid);
+            }
+
+            if (holidaze) {
+                const holidazeDistance = player.position.distanceTo(
+                    holidaze.position
+                );
+
+                if (holidazeDistance < 2.8) {
+                    const screenPos = holidaze.position.clone().project(camera);
+                    const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (screenPos.y * -0.5 + 0.5) * window.innerHeight;
+
+                    promptRef.current?.showPrompt({
+                        id: holidaze.uuid,
+                        content: (
+                            <div style={{ textAlign: "center" }}>
+                                <p
+                                    style={{
+                                        textOverflow: "ellipsis",
+                                    }}
+                                >
+                                    Holidaze is a React-based booking website
+                                    designed to help users
+                                    <br /> find and book venues for their stays.
+                                    It features user authentication,
+                                    <br /> venue creation and management,
+                                    personal profiles, and
+                                    <br /> interactive booking calendars.
+                                    <br />
+                                    <br />
+                                    Press "E" or click the button below to view
+                                    project!
+                                </p>
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "center",
+                                        alignItems: "center",
+                                        gap: "16px",
+                                    }}
+                                >
+                                    <button
+                                        style={{
+                                            marginTop: "16px",
+                                            marginRight: "16px",
+                                            padding: "8px 16px",
+                                            backgroundColor: "#088D9A",
+                                            border: "none",
+                                            borderRadius: "4px",
+                                            color: "white",
+                                            cursor: "pointer",
+                                            fontSize: "16px",
+                                            fontWeight: "bold",
+                                        }}
+                                        onClick={() =>
+                                            window.open(
+                                                "https://jnet-holidaze.netlify.app/",
+                                                "_blank"
+                                            )
+                                        }
+                                    >
+                                        View Project!
+                                    </button>
+                                    <button
+                                        style={{
+                                            backgroundColor: "white",
+                                            borderRadius: "999px",
+                                            cursor: "pointer",
+                                            border: "none",
+                                            marginTop: "16px",
+                                            width: "33px",
+                                            height: "33px",
+                                        }}
+                                        title="Github Code"
+                                        onClick={() => {
+                                            window.open(
+                                                "https://github.com/JNettli/jnettli-spring-2025",
+                                                "_blank"
+                                            );
+                                        }}
+                                    >
+                                        <img
+                                            src="/assets/img/github.png"
+                                            alt="Github Logo"
+                                            style={{
+                                                width: "28px",
+                                                position: "relative",
+                                                left: "-3px",
+                                                top: "0.5px",
+                                            }}
+                                        />
+                                    </button>
+                                </div>
+                            </div>
+                        ),
+                        x,
+                        y,
+                    });
+                } else {
+                    promptRef.current?.hidePrompt(holidaze.uuid);
+                }
+            }
+            if (anemicHeroes) {
+                const anemicHeroesDistance = player.position.distanceTo(
+                    anemicHeroes.position
+                );
+
+                if (anemicHeroesDistance < 2.8) {
+                    const screenPos = anemicHeroes.position
+                        .clone()
+                        .project(camera);
+                    const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (screenPos.y * -0.5 + 0.5) * window.innerHeight;
+
+                    promptRef.current?.showPrompt({
+                        id: anemicHeroes.uuid,
+                        content: (
+                            <div style={{ textAlign: "center" }}>
+                                <p
+                                    style={{
+                                        textOverflow: "ellipsis",
+                                    }}
+                                >
+                                    Anemic Heroes is a group project where me
+                                    and 4 others
+                                    <br />
+                                    created a game using Javascript, and was
+                                    mostly a test
+                                    <br />
+                                    to see how well we could work on a project
+                                    as a team.
+                                    <br />
+                                    Anemic Heroes is a testament to our
+                                    creativity and
+                                    <br />
+                                    technical skill in trying to give player a
+                                    unique
+                                    <br />
+                                    gaming experience.
+                                </p>
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "center",
+                                        alignItems: "center",
+                                        gap: "16px",
+                                    }}
+                                >
+                                    <button
+                                        style={{
+                                            marginTop: "16px",
+                                            marginRight: "16px",
+                                            padding: "8px 16px",
+                                            backgroundColor: "#088D9A",
+                                            border: "none",
+                                            borderRadius: "4px",
+                                            color: "white",
+                                            cursor: "pointer",
+                                            fontSize: "16px",
+                                            fontWeight: "bold",
+                                        }}
+                                        onClick={() =>
+                                            window.open(
+                                                "https://anemic-heroes.netlify.app/",
+                                                "_blank"
+                                            )
+                                        }
+                                    >
+                                        View Project!
+                                    </button>
+                                    <button
+                                        style={{
+                                            backgroundColor: "white",
+                                            borderRadius: "999px",
+                                            cursor: "pointer",
+                                            border: "none",
+                                            marginTop: "16px",
+                                            width: "33px",
+                                            height: "33px",
+                                        }}
+                                        title="Github Code"
+                                        onClick={() => {
+                                            window.open(
+                                                "https://github.com/AnemicGames/AnemicHeroes",
+                                                "_blank"
+                                            );
+                                        }}
+                                    >
+                                        <img
+                                            src="/assets/img/github.png"
+                                            alt="Github Logo"
+                                            style={{
+                                                width: "28px",
+                                                position: "relative",
+                                                left: "-3px",
+                                                top: "0.5px",
+                                            }}
+                                        />
+                                    </button>
+                                </div>
+                            </div>
+                        ),
+                        x,
+                        y,
+                    });
+                } else {
+                    promptRef.current?.hidePrompt(anemicHeroes.uuid);
+                }
+            }
+            if (zork) {
+                const zorkDistance = player.position.distanceTo(zork.position);
+
+                if (zorkDistance < 2.8) {
+                    const screenPos = zork.position.clone().project(camera);
+                    const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (screenPos.y * -0.5 + 0.5) * window.innerHeight;
+
+                    promptRef.current?.showPrompt({
+                        id: zork.uuid,
+                        content: (
+                            <div style={{ textAlign: "center" }}>
+                                <p
+                                    style={{
+                                        textOverflow: "ellipsis",
+                                    }}
+                                >
+                                    Zork Remake is a remake of the classic game
+                                    Zork!
+                                    <br /> It is a text-based adventure game
+                                    with the classic "Matrix"
+                                    <br /> look of old-school computers with a
+                                    brand new story and functionality.
+                                    <br /> Implemented with HTML, CSS and most
+                                    importantly, Javascript,
+                                    <br /> the game allows you to use text
+                                    commands to walk around,
+                                    <br /> look at the environment and go on an
+                                    amazing adventure!
+                                </p>
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "center",
+                                        alignItems: "center",
+                                        gap: "16px",
+                                    }}
+                                >
+                                    <button
+                                        style={{
+                                            marginTop: "16px",
+                                            marginRight: "16px",
+                                            padding: "8px 16px",
+                                            backgroundColor: "#088D9A",
+                                            border: "none",
+                                            borderRadius: "4px",
+                                            color: "white",
+                                            cursor: "pointer",
+                                            fontSize: "16px",
+                                            fontWeight: "bold",
+                                        }}
+                                        onClick={() =>
+                                            window.open(
+                                                "https://jnettli-zork-remake.netlify.app/",
+                                                "_blank"
+                                            )
+                                        }
+                                    >
+                                        View Project!
+                                    </button>
+                                    <button
+                                        style={{
+                                            backgroundColor: "white",
+                                            borderRadius: "999px",
+                                            cursor: "pointer",
+                                            border: "none",
+                                            marginTop: "16px",
+                                            width: "33px",
+                                            height: "33px",
+                                        }}
+                                        title="Github Code"
+                                        onClick={() => {
+                                            window.open(
+                                                "https://github.com/JNettli/zork-remake",
+                                                "_blank"
+                                            );
+                                        }}
+                                    >
+                                        <img
+                                            src="/assets/img/github.png"
+                                            alt="Github Logo"
+                                            style={{
+                                                width: "28px",
+                                                position: "relative",
+                                                left: "-3px",
+                                                top: "0.5px",
+                                            }}
+                                        />
+                                    </button>
+                                </div>
+                            </div>
+                        ),
+                        x,
+                        y,
+                    });
+                } else {
+                    promptRef.current?.hidePrompt(zork.uuid);
+                }
             }
 
             renderer.render(scene, camera);
@@ -790,7 +1158,6 @@ export default function Hub3D() {
         gameLoop(performance.now());
 
         return () => {
-            window.removeEventListener("click", onClick);
             window.removeEventListener("keydown", handleKeyDown);
             window.removeEventListener("keyup", handleKeyUp);
             if (mountNode && renderer.domElement.parentNode === mountNode) {
@@ -799,37 +1166,28 @@ export default function Hub3D() {
         };
     }, [navigate]);
 
+    loadingManager.onLoad = () => {
+        setIsLoading(false);
+    };
+
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            if (loadingManager.itemStart === 0) setIsLoading(false);
+        }, 1000);
+
+        return () => clearTimeout(timeout);
+    }, []);
+
     return (
-        <div
-            ref={mountRef}
-            style={{
-                overflow: "hidden",
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%) scale(1)",
-            }}
-        >
+        <>
+            {isLoading && <Preloader />}
             <div
-                ref={promptRef}
-                id="interactionPrompt"
-                style={{
-                    position: "absolute",
-                    color: "#E0FDFF",
-                    backgroundColor: "rgba(0,0,0,0.6)",
-                    padding: "6px 10px",
-                    borderRadius: "5px",
-                    fontFamily: "Arial, sans-serif",
-                    fontSize: "16px",
-                    pointerEvents: "none",
-                    display: "none",
-                    transform: "translate(-50%, -100%)",
-                    whiteSpace: "nowrap",
-                    userSelect: "none",
-                }}
+                ref={mountRef}
+                style={{ width: "100%", height: "100%", overflow: "hidden" }}
             >
-                Press E to remove walls
+                <HoverPromptManager ref={promptRef} />
             </div>
-        </div>
+            {isMobile ? <Joystick onMove={(vec) => setJoystick(vec)} /> : ""}
+        </>
     );
 }
