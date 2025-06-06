@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { useNavigate } from "react-router-dom";
 import Preloader from "./components/Preloader";
 import { RGBELoader } from "three/examples/jsm/Addons.js";
-import Joystick from "./components/Joystick";
+// import Joystick from "./components/Joystick";
 import "../index.css";
 import HoverPromptManager from "./components/HoverPrompt";
 
@@ -212,17 +212,17 @@ export default function Hub3D() {
             new THREE.BoxGeometry(1, 2, 0.1),
             new THREE.MeshStandardMaterial({ color: 0xffffff })
         );
-        door.position.set(0, 1, -8);
+        door.position.set(0, -2, -8.1);
         scene.add(door);
 
         // Gallery 1
         let holidaze;
         loader.load("/assets/img/defaultlogo.png", (texture) => {
             holidaze = new THREE.Mesh(
-                new THREE.BoxGeometry(0.1, 2, 4),
+                new THREE.BoxGeometry(4, 2, 0.1),
                 new THREE.MeshStandardMaterial({ map: texture })
             );
-            holidaze.position.set(7.6, 1.5, 0);
+            holidaze.position.set(0, 1.5, 7.6);
             scene.add(holidaze);
         });
 
@@ -241,10 +241,10 @@ export default function Hub3D() {
         let zork;
         loader.load("/assets/img/zork.png", (texture) => {
             zork = new THREE.Mesh(
-                new THREE.BoxGeometry(4, 2, 0.1),
+                new THREE.BoxGeometry(0.1, 2, 4),
                 new THREE.MeshStandardMaterial({ map: texture })
             );
-            zork.position.set(0, 1.5, 7.6);
+            zork.position.set(7.6, 1.5, 0);
             scene.add(zork);
         });
 
@@ -276,11 +276,30 @@ export default function Hub3D() {
 
         const spriteGeometry = new THREE.PlaneGeometry(1, 1);
         const player = new THREE.Mesh(spriteGeometry, spriteMaterial);
-        //player.position.set(0, 0.25, -2);
-        player.position.set(0, 2, 2);
+        player.position.set(0, 2, 4);
+
+        // Controls decal
+        loader.load("/assets/img/controls.svg", (texture) => {
+            texture.flipY = false;
+            const planeMaterial = new THREE.MeshBasicMaterial({
+                map: texture,
+                transparent: true,
+                side: THREE.DoubleSide,
+            });
+
+            const PlaneGeometry = new THREE.PlaneGeometry(2.5, 1.5);
+            const controlsPlane = new THREE.Mesh(PlaneGeometry, planeMaterial);
+
+            controlsPlane.position.set(0, 0.01, 2);
+            controlsPlane.rotation.x = -Math.PI / 2;
+
+            controlsPlane.scale.x = -1;
+
+            scene.add(controlsPlane);
+        });
 
         // X, Y, Z, Width, Height, Depth
-        createPlatform(0, 2.1, -5, 2, 0.2, 2);
+        createPlatform(0, 2.1, -7, 2, 0.2, 2);
         createPlatform(4, 3.5, 0, 1, 0.2, 1);
         createPlatform(-4.1, 4, 0, 1, 0.2, 1);
 
@@ -333,8 +352,8 @@ export default function Hub3D() {
             new THREE.MeshStandardMaterial({ color: 0xff0000 })
         );
 
-        interactBox.position.set(0, 0.2, 4);
-        interactButton.position.set(0, 0.4, 4);
+        interactBox.position.set(0, 0.3, -0.9);
+        interactButton.position.set(0, 0.5, -0.9);
         scene.add(interactBox);
         scene.add(interactButton);
 
@@ -350,7 +369,7 @@ export default function Hub3D() {
                     interactButton.position
                 );
                 if (distToBtn < 1) {
-                    toggleWalls();
+                    toggleDoor();
                 }
                 const distToHolidaze = player.position.distanceTo(
                     holidaze.position
@@ -395,11 +414,12 @@ export default function Hub3D() {
         const jumpStrength = 0.16;
         const gravity = -0.008;
 
-        let wallsVisible = false;
+        let doorVisible = false;
+        let doorTargetY = -1;
 
-        function toggleWalls() {
-            wallsVisible = !wallsVisible;
-            walls.scale.y = !wallsVisible ? 1 : 0.0001;
+        function toggleDoor() {
+            doorVisible = !doorVisible;
+            doorTargetY = doorVisible ? 1 : -1;
         }
 
         const UPDATE_INTERVAL = 1000 / 60;
@@ -811,6 +831,10 @@ export default function Hub3D() {
                 interactButton.position
             );
 
+            const currentY = door.position.y;
+
+            door.position.y = THREE.MathUtils.lerp(currentY, doorTargetY, 0.03);
+
             if (distance < 1) {
                 const vector = interactButton.position.clone().project(camera);
                 const x = (vector.x * 0.5 + 0.5) * width;
@@ -818,7 +842,7 @@ export default function Hub3D() {
 
                 promptRef.current?.showPrompt({
                     id: interactButton.uuid,
-                    content: "Press E to remove walls",
+                    content: "Press E to show secret door!",
                     x,
                     y,
                 });
@@ -1187,7 +1211,8 @@ export default function Hub3D() {
             >
                 <HoverPromptManager ref={promptRef} />
             </div>
-            {isMobile ? <Joystick onMove={(vec) => setJoystick(vec)} /> : ""}
         </>
     );
 }
+
+//{isMobile ? <Joystick onMove={(vec) => setJoystick(vec)} /> : ""}
