@@ -21,29 +21,39 @@ function AppRouter() {
     const location = useLocation();
     const navigate = useNavigate();
 
-    const [loading, setLoading] = useState(true);
-    const [transitionPath, setTransitionPath] = useState(null);
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setLoading(false);
-        }, 500);
-        return () => clearTimeout(timer);
-    }, [location]);
+    const [loading, setLoading] = useState(false);
+    const [currentLocation, setCurrentLocation] = useState(location);
+    const [nextPath, setNextPath] = useState(null);
 
     const transitionTo = (path) => {
         setLoading(true);
-        setTransitionPath(path);
-
-        setTimeout(() => {
-            navigate(path);
-        }, 700);
+        setNextPath(path);
     };
+
+    useEffect(() => {
+        if (loading && nextPath) {
+            const timeout = setTimeout(() => {
+                navigate(nextPath);
+                setCurrentLocation({ pathname: nextPath });
+                setNextPath(null);
+            }, 700);
+            return () => clearTimeout(timeout);
+        }
+    }, [loading, nextPath, navigate]);
+
+    useEffect(() => {
+        if (!nextPath && loading) {
+            const timeout = setTimeout(() => {
+                setLoading(false);
+            }, 500);
+            return () => clearTimeout(timeout);
+        }
+    }, [nextPath, loading]);
 
     return (
         <NavigationContext.Provider value={{ transitionTo }}>
             <TransitionScreen loading={loading} />
-            <Routes location={location}>
+            <Routes location={currentLocation}>
                 <Route path="/" element={<Hub3D />} />
                 <Route path="/time-trial" element={<TimeTrialGame />} />
             </Routes>

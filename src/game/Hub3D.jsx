@@ -69,6 +69,9 @@ export default function Hub3D() {
             color: 0x888888,
             metalness: 1,
             roughness: 0,
+            opacity: 1,
+            transparent: false,
+            depthWrite: false,
         });
 
         const floor = new THREE.Mesh(floorGeometry, floorMaterial);
@@ -124,63 +127,72 @@ export default function Hub3D() {
         }
 
         // Starfield
-        const starCount = 5000;
-        const starGeometry = new THREE.BufferGeometry();
-        const starPositions = [];
+        let stars;
+        let starMaterial;
 
-        const minRadius = 5;
-        const maxRadius = 50;
-        const minY = 100;
-        const maxY = 1000;
+        function createStarfield(minY = 100, maxY = 1000) {
+            const starCount = 5000;
+            const starGeometry = new THREE.BufferGeometry();
+            const starPositions = [];
 
-        for (let i = 0; i < starCount; i++) {
-            let x, y, z;
+            const minRadius = 8;
+            const maxRadius = 50;
 
-            while (true) {
-                const angle = Math.random() * 2 * Math.PI;
-                const r = minRadius + Math.random() * (maxRadius - minRadius);
-                x = r * Math.cos(angle);
-                z = r * Math.sin(angle);
-                y = minY + Math.random() * (maxY - minY);
+            for (let i = 0; i < starCount; i++) {
+                let x, y, z;
 
-                const distFromCenter = Math.sqrt(x * x + z * z);
-                if (distFromCenter >= minRadius) break;
+                while (true) {
+                    const angle = Math.random() * 2 * Math.PI;
+                    const r =
+                        minRadius + Math.random() * (maxRadius - minRadius);
+                    x = r * Math.cos(angle);
+                    z = r * Math.sin(angle);
+                    y = minY + Math.random() * (maxY - minY);
+
+                    const distFromCenter = Math.sqrt(x * x + z * z);
+                    if (distFromCenter >= minRadius) break;
+                }
+
+                starPositions.push(x, y, z);
             }
 
-            starPositions.push(x, y, z);
+            starGeometry.setAttribute(
+                "position",
+                new THREE.Float32BufferAttribute(starPositions, 3)
+            );
+
+            const starSizes = new Float32Array(starCount);
+            for (let i = 0; i < starCount; i++) {
+                starSizes[i] = 0.05 + Math.random() * 0.2;
+            }
+            starGeometry.setAttribute(
+                "size",
+                new THREE.BufferAttribute(starSizes, 1)
+            );
+
+            const starMaterial = new THREE.PointsMaterial({
+                color: 0xe0fdff,
+                size: 0.05,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+            });
+
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            return { stars, starMaterial };
         }
 
-        starGeometry.setAttribute(
-            "position",
-            new THREE.Float32BufferAttribute(starPositions, 3)
-        );
-
-        const starMaterial = new THREE.PointsMaterial({
-            color: 0xe0fdff,
-            size: 0.05,
-            transparent: true,
-            opacity: 0.8,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-        });
-
-        const stars = new THREE.Points(starGeometry, starMaterial);
+        const starResult = createStarfield();
+        stars = starResult.stars;
+        starMaterial = starResult.starMaterial;
         scene.add(stars);
-
-        const starSizes = new Float32Array(starCount);
-        for (let i = 0; i < starCount; i++) {
-            starSizes[i] = 0.05 + Math.random() * 0.2;
-        }
-        starGeometry.setAttribute(
-            "size",
-            new THREE.BufferAttribute(starSizes, 1)
-        );
 
         // Walls
         const walls = new THREE.Mesh(
             new THREE.CylinderGeometry(8, 8, 0.2, 64, 1, true),
             new THREE.MeshStandardMaterial({
-                color: 0xffffff,
+                color: 0xaaaaaa,
                 side: THREE.DoubleSide,
             })
         );
@@ -199,6 +211,7 @@ export default function Hub3D() {
         scene.add(column);
 
         // Door
+        /*
         let door;
         door = new THREE.Mesh(
             new THREE.BoxGeometry(1, 2, 0.1),
@@ -206,7 +219,7 @@ export default function Hub3D() {
         );
         door.position.set(0, -2, -8.1);
         scene.add(door);
-
+        */
         // Gallery 1
         let holidaze;
         loader.load("/assets/img/defaultlogo.png", (texture) => {
@@ -271,23 +284,32 @@ export default function Hub3D() {
         player.position.set(0, 2, 4);
 
         // Controls decal
+        let controlsPlane = null;
+        let controlsTextureBlack, controlsTextureWhite;
+
         loader.load("/assets/img/controls.svg", (texture) => {
             texture.flipY = false;
-            const planeMaterial = new THREE.MeshBasicMaterial({
-                map: texture,
+            controlsTextureBlack = texture;
+
+            const material = new THREE.MeshBasicMaterial({
+                map: controlsTextureBlack,
                 transparent: true,
                 side: THREE.DoubleSide,
+                depthWrite: false,
             });
 
-            const PlaneGeometry = new THREE.PlaneGeometry(2.5, 1.5);
-            const controlsPlane = new THREE.Mesh(PlaneGeometry, planeMaterial);
-
+            const geometry = new THREE.PlaneGeometry(2.5, 1.5);
+            controlsPlane = new THREE.Mesh(geometry, material);
             controlsPlane.position.set(0, 0.01, 2);
             controlsPlane.rotation.x = -Math.PI / 2;
-
             controlsPlane.scale.x = -1;
 
             scene.add(controlsPlane);
+        });
+
+        loader.load("/assets/img/controls-white.svg", (texture) => {
+            texture.flipY = false;
+            controlsTextureWhite = texture;
         });
 
         // X, Y, Z, Width, Height, Depth
@@ -358,7 +380,29 @@ export default function Hub3D() {
                     interactButton.position
                 );
                 if (distToBtn < 1) {
-                    toggleDoor();
+                    //toggleDoor();
+                    if (controlsPlane && controlsTextureWhite) {
+                        controlsPlane.material.map = controlsTextureWhite;
+                        controlsPlane.material.map.needsUpdate = true;
+                        controlsPlane.material.needsUpdate = true;
+                    }
+
+                    scene.environment = null;
+                    scene.background = new THREE.Color(0x010105);
+
+                    if (floor && floor.material) {
+                        floor.material.transparent = true;
+                        floor.material.opacity = 0;
+                        floor.material.needsUpdate = true;
+                    }
+                    scene.remove(stars);
+                    stars.geometry.dispose();
+                    stars.material.dispose();
+
+                    const newResult = createStarfield(-50, 100);
+                    stars = newResult.stars;
+                    starMaterial = newResult.starMaterial;
+                    scene.add(stars);
                 }
                 const distToHolidaze = player.position.distanceTo(
                     holidaze.position
@@ -379,11 +423,13 @@ export default function Hub3D() {
                         "_blank"
                     );
                 }
+                /*
                 const distToDoor = player.position.distanceTo(door.position);
                 if (distToDoor < 1) {
                     console.log("Pressed E");
                     transitionTo("/time-trial");
                 }
+                    */
             }
         };
         const handleKeyUp = (e) => {
@@ -804,6 +850,22 @@ export default function Hub3D() {
                 interactButton.position
             );
 
+            if (distance < 1) {
+                const vector = interactButton.position.clone().project(camera);
+                const x = (vector.x * 0.5 + 0.5) * width;
+                const y = (vector.y * -0.5 + 0.5) * height;
+
+                promptRef.current?.showPrompt({
+                    id: interactButton.uuid,
+                    content: "Press E to toggle stars!",
+                    x,
+                    y,
+                });
+            } else {
+                promptRef.current?.hidePrompt(interactButton.uuid);
+            }
+
+            /*
             const currentY = door.position.y;
 
             door.position.y = THREE.MathUtils.lerp(currentY, doorTargetY, 0.03);
@@ -822,7 +884,7 @@ export default function Hub3D() {
             } else {
                 promptRef.current?.hidePrompt(interactButton.uuid);
             }
-
+            */
             if (holidaze) {
                 const holidazeDistance = player.position.distanceTo(
                     holidaze.position
@@ -1129,6 +1191,7 @@ export default function Hub3D() {
                     promptRef.current?.hidePrompt(zork.uuid);
                 }
             }
+            /*
             if (door) {
                 const doorDistance = player.position.distanceTo(door.position);
 
@@ -1156,13 +1219,15 @@ export default function Hub3D() {
                 } else {
                     promptRef.current?.hidePrompt(door.uuid);
                 }
-            }
+            }*/
 
             renderer.render(scene, camera);
         }
 
         function animateStars(time) {
-            starMaterial.opacity = 0.6 + 0.2 * Math.sin(time * 0.005);
+            if (starMaterial) {
+                starMaterial.opacity = 0.6 + 0.2 * Math.sin(time * 0.005);
+            }
         }
 
         function gameLoop(currentTime) {
