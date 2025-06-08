@@ -61,10 +61,23 @@ function AppRouter() {
     );
 }
 
+function Root() {
+    useEffect(() => {
+        const isMobile =
+            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+                navigator.userAgent
+            );
+        if (isMobile) {
+            window.location.href = "https://jnettli.netlify.app/";
+        }
+    }, []);
+    return <AppRouter />;
+}
+
 ReactDOM.createRoot(document.getElementById("root")).render(
     <React.StrictMode>
         <BrowserRouter>
-            <AppRouter />
+            <Root />
         </BrowserRouter>
     </React.StrictMode>
 );
