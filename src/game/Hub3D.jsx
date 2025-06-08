@@ -3,20 +3,18 @@ import * as THREE from "three";
 import { useNavigate } from "react-router-dom";
 import Preloader from "./components/Preloader";
 import { RGBELoader } from "three/examples/jsm/Addons.js";
-// import Joystick from "./components/Joystick";
+import { useRouteTransition } from "../main";
 import "../index.css";
 import HoverPromptManager from "./components/HoverPrompt";
 
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
 export default function Hub3D() {
     const navigate = useNavigate();
-    const [joystick, setJoystick] = useState({ x: 0, y: 0 });
     const [isLoading, setIsLoading] = useState(true);
     const loadingManager = new THREE.LoadingManager();
     const loader = new THREE.TextureLoader(loadingManager);
     const mountRef = useRef(null);
     const promptRef = useRef(null);
+    const { transitionTo } = useRouteTransition();
 
     useEffect(() => {
         const mountNode = mountRef.current;
@@ -98,13 +96,6 @@ export default function Hub3D() {
             });
             return platform;
         }
-
-        // X, Y, Z, Width, Height, Depth
-        /*
-        createPlatform(0, 2.1, -5, 2, 0.2, 3);
-        createPlatform(1.5, 2.5, 0, 1, 0.2, 1);
-        createPlatform(-1, 4, 0, 1.5, 0.2, 2);
-        */
 
         function checkPlatformCollision(player, platform, yVelocity) {
             const { mesh, width, height, depth } = platform;
@@ -208,7 +199,8 @@ export default function Hub3D() {
         scene.add(column);
 
         // Door
-        const door = new THREE.Mesh(
+        let door;
+        door = new THREE.Mesh(
             new THREE.BoxGeometry(1, 2, 0.1),
             new THREE.MeshStandardMaterial({ color: 0xffffff })
         );
@@ -299,11 +291,8 @@ export default function Hub3D() {
         });
 
         // X, Y, Z, Width, Height, Depth
-        createPlatform(0, 2.1, -7, 2, 0.2, 2);
-        createPlatform(4, 3.5, 0, 1, 0.2, 1);
-        createPlatform(-4.1, 4, 0, 1, 0.2, 1);
-
-        createPlatform(0, 3, 4, 1, 0.2, 1);
+        /*
+        createPlatform(0, 5, 4, 1, 0.2, 1);
         createPlatform(0, 6, 4, 1, 0.2, 1);
         createPlatform(0, 9, 4, 1, 0.2, 1);
         createPlatform(0, 12, 4, 1, 0.2, 1);
@@ -338,7 +327,7 @@ export default function Hub3D() {
         createPlatform(0, 99, 4, 1, 0.2, 1);
         createPlatform(0, 102, 4, 1, 0.2, 1);
 
-        createPlatform(0, 995, -2, 1, 0.2, 1);
+        createPlatform(0, 995, -2, 1, 0.2, 1);*/
 
         scene.add(player);
 
@@ -389,6 +378,11 @@ export default function Hub3D() {
                         "https://jnettli-zork-remake.netlify.app/",
                         "_blank"
                     );
+                }
+                const distToDoor = player.position.distanceTo(door.position);
+                if (distToDoor < 1) {
+                    console.log("Pressed E");
+                    transitionTo("/time-trial");
                 }
             }
         };
@@ -452,27 +446,6 @@ export default function Hub3D() {
                 moveVector.sub(right);
             if (keysPressed["d"] || keysPressed["arrowright"])
                 moveVector.add(right);
-
-            if (joystick.x !== 0 || joystick.y !== 0) {
-                const forward = new THREE.Vector3(
-                    Math.sin(player.rotation.y),
-                    0,
-                    Math.cos(player.rotation.y)
-                );
-                const right = new THREE.Vector3().crossVectors(
-                    forward,
-                    new THREE.Vector3(0, 1, 0)
-                );
-
-                forward.normalize();
-                right.normalize();
-
-                moveVector
-                    .add(forward.multiplyScalar(-joystick.y))
-                    .add(right.multiplyScalar(joystick.x));
-
-                moveVector.normalize().multiplyScalar(currentSpeed);
-            }
 
             if (moveVector.length() > 0) {
                 moveVector.normalize().multiplyScalar(currentSpeed);
@@ -1156,6 +1129,34 @@ export default function Hub3D() {
                     promptRef.current?.hidePrompt(zork.uuid);
                 }
             }
+            if (door) {
+                const doorDistance = player.position.distanceTo(door.position);
+
+                if (doorDistance < 1) {
+                    const screenPos = door.position.clone().project(camera);
+                    const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (screenPos.y * -0.5 + 0.5) * window.innerHeight;
+
+                    promptRef.current?.showPrompt({
+                        id: door.uuid,
+                        content: (
+                            <div style={{ textAlign: "center" }}>
+                                <p
+                                    style={{
+                                        textOverflow: "ellipsis",
+                                    }}
+                                >
+                                    Press "E" to go to the Time Trial!
+                                </p>
+                            </div>
+                        ),
+                        x,
+                        y,
+                    });
+                } else {
+                    promptRef.current?.hidePrompt(door.uuid);
+                }
+            }
 
             renderer.render(scene, camera);
         }
@@ -1214,5 +1215,3 @@ export default function Hub3D() {
         </>
     );
 }
-
-//{isMobile ? <Joystick onMove={(vec) => setJoystick(vec)} /> : ""}
